@@ -1,0 +1,30 @@
+name: Sync upstream
+
+on:
+  schedule:
+    # 每天北京时间 00:00（UTC 16:00）
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # 只在 fork 中运行，避免上游合并本文件后在上游仓库里执行
+    if: github.event.repository.fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge upstream into ${{ github.event.repository.default_branch }}
+        env:
+          # 上游改动 .github/workflows 时 GITHUB_TOKEN 无权推送，需配置带 workflow 权限的 PAT（SYNC_TOKEN）
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/merge-upstream" -f branch="$BRANCH" \
+            --jq '"result: \(.merge_type) | \(.message)"'
